@@ -1,5 +1,5 @@
 import React, { Component, ChangeEvent } from "react";
-import GUN, { IGunChain, IGunInstance } from "gun";
+import GUN, { GunMessagePut, IGunChain, IGunInstance } from "gun";
 import Container from "@mui/material/Container";
 import Paper from "@mui/material/Paper";
 import FormControl from "@mui/material/FormControl";
@@ -14,13 +14,13 @@ import styles from "../styles/Player.module.css";
 /**
  * User interface for the players to enter their answers
  */
-class Player extends Component<{}, PlayerState> {
+class Player extends Component<Record<string, never>, PlayerState> {
   /** Database instance */
   private _db: IGunInstance;
   /** Answer list database node */
   private _answers: IGunChain<any, IGunInstance<any>, IGunInstance<any>, "test">;
 
-  constructor(props: {}) {
+  constructor(props: Record<string, never>) {
     super(props);
     this._db = GUN({ peers: ["http://localhost:8765/gun"], radisk: false });
     this._answers = this._db.get("test");
@@ -48,17 +48,30 @@ class Player extends Component<{}, PlayerState> {
    * Adds answer to database if in game mode
    */
   private _submit = () => {
+    console.log("Submit button clicked.");
     const { answer, mode, name, team } = this.state;
-    if (mode === "init" && name.trim().length > 0 && team.length > 0) this.setState({ mode: "game" });
-    if (mode === "game" && answer.trim().length > 0)
-      this._answers.set(
-        {
-          answer,
-          name,
-          team,
-        },
-        () => this.setState({ answer: "" })
-      );
+    if (mode === "init" && name.trim().length > 0 && team.length > 0) {
+      console.log("Name submitted. Game mode updated.");
+      this.setState({ mode: "game" });
+    }
+    if (mode === "game" && answer.trim().length > 0) {
+      console.log("Answer submitted - processing...");
+      const ansNode = this._db.get(`${name}-${team}`).put({ answer, name, team }, (msg: GunMessagePut) => {
+        if (typeof msg === "string") console.error("SUBMIT ERROR:", msg);
+        else {
+          console.log("Commencing set operation...");
+          this._answers.set(ansNode, (msg: GunMessagePut) => {
+            if (typeof msg === "string") {
+              console.error("SUBMIT ERROR:", msg);
+              this._submit();
+            } else {
+              console.log("Submit Success for SET operation");
+              this.setState({ answer: "" });
+            }
+          });
+        }
+      });
+    }
   };
 
   render = () => {

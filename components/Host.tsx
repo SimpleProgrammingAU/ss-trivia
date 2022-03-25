@@ -47,7 +47,7 @@ class Host extends Component<Record<string, never>, HostState> {
 
   componentDidMount = () => {
     // Listen for updates on the "test" node
-    this._answers.map().on(this._handleUpdate);
+    this._answers.map().on(this._handleUpdate, { change: true });
   };
 
   /**
@@ -56,13 +56,15 @@ class Host extends Component<Record<string, never>, HostState> {
    * @param idx - item index in Gun database
    */
   private _handleUpdate = (data: RawAnswer | null, idx: string) => {
-    delete data?._;
     // the next answer should either be null or the first entry in the answerList table
     const nextAnswer: Answer | null =
       this._answerList.length === 0 ? (data === null ? data : { ...data, idx }) : this._answerList[0];
     if (data === null) {
       //filters out deleted items from local answer list
       this._answerList = [...this._answerList.filter((ans) => ans.idx !== idx)];
+    } else if (!data.answer || !data.name || !data.team) {
+      //Defend against bad data
+      this._answers.get(idx).put(null);
     } else {
       //adds the new item to the answer list
       this._answerList.push({ ...data, idx });
